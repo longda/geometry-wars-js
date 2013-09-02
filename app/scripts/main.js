@@ -24,6 +24,12 @@ function Sound() {
 
 var Input = {
   //keyboard: new KeyboardState(),
+  // keyboardState: undefined,
+  // lastKeyboardState: undefined,
+  // mouseState: undefined,
+  // lastMouseState: undefined,
+  // gamepadState: undefined,
+  // lastGamepadState: undefined,
 
   update: function(){
 
@@ -59,6 +65,14 @@ var Input = {
     {
       direction.y += 1;
     }
+
+    // Clamp the length of the vector to a maximum of 1.
+    if (direction.lengthSq() > 1)
+    {
+      direction = direction.normalize();
+    }
+
+
 
     return direction;
   },
@@ -112,7 +126,7 @@ function Entity() {
   this.isExpired = false;
   
   this.size = function(){
-    return image === undefined ? THREE.Vector2.ZERO : new THREE.Vector2(this.image.width, this.image.height);
+    return this.image === undefined ? THREE.Vector2.ZERO : new THREE.Vector2(this.image.width, this.image.height);
   }
 
   this.update = function(){
@@ -185,8 +199,12 @@ function PlayerShip() {
     this.velocity = Input.getMovementDirection().multiplyScalar(speed);
     this.position = this.position.add(this.velocity);
     this.position = this.position.clamp(this.size/2, GameRoot.screenSize - this.size/2);
+    //this.position = this.position.clamp(this.size().divideScalar(2), GameRoot.screenSize.addScalar(this.size().divideScalar(2).negate()));
 
     if (this.velocity.lengthSq() > 0){
+      // invert the y-axis here? -- note: this was in the input class before but was influencing direction rather than orientation
+      this.velocity.y *= -1;
+
       this.orientation = this.velocity.toAngle();
       //console.log(this.orientation);
     }
@@ -276,6 +294,9 @@ var GameRoot = {
     document.body.appendChild(this.renderer.domElement);
 
     this.camera.position.z = 5;
+
+    //console.log('screensize: ', this.screenSize);
+    //console.log('camera: ', this.camera);
 
     var ps = new PlayerShip();  // TODO: make this into and use singleton
     EntityManager.add(ps);
