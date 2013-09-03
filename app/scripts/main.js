@@ -1,4 +1,6 @@
 var GW = GW || {};
+GW.Random = GW.Random || {};
+GW.Math = GW.Math || {};
 
 console.log('\'Allo \'Allo!');
 
@@ -8,6 +10,31 @@ console.log('\'Allo \'Allo!');
 THREE.Vector2.ZERO = new THREE.Vector2(0, 0);
 THREE.Vector2.prototype.toAngle = function(){
   return Math.atan2(this.y, this.x);
+}
+GW.Random.NextFloat = function(min, max){
+  return Math.random() * (max - min) + min;
+}
+GW.Math.FromPolar = function(angle, magnitude){
+  return new THREE.Vector2(Math.cos(angle), Math.sin(angle)).multiplyScalar(magnitude);
+}
+GW.Math.Transform = function(value, rotation){
+  // value == vector2
+  // rotation == quaternion
+  var output = new THREE.Vector2(0, 0);
+  var x = rotation.x + rotation.x;
+  var y = rotation.y + rotation.y;
+  var z = rotation.z + rotation.z;
+  var w = rotation.w * z;
+  var single = rotation.x * x;
+  var x1 = rotation.x * y;
+  var y1 = rotation.y * y;
+  var z1 = rotation.z * z;
+  var single1 = value.x * (1.0 - y1 - z1) + value.y * (x1 - w);
+  var x2 = value.x * (x1 + w) + value.y * (1.0 - single - z1);
+  output.x = single1;
+  output.y = x2;
+
+  return output;
 }
 
 
@@ -23,13 +50,18 @@ function Sound() {
 // INPUT
 
 var Input = {
-  //keyboard: new KeyboardState(),
-  // keyboardState: undefined,
-  // lastKeyboardState: undefined,
-  // mouseState: undefined,
-  // lastMouseState: undefined,
-  // gamepadState: undefined,
-  // lastGamepadState: undefined,
+  keyboard: new KeyboardState(),
+  keyboardState: undefined,
+  lastKeyboardState: undefined,
+  mouseState: undefined,
+  lastMouseState: undefined,
+  gamepadState: undefined,
+  lastGamepadState: undefined,
+  isAimingWithMouse: false,
+
+  mousePosition: function(){
+    return THREE.Vector2.ZERO;
+  },
 
   update: function(){
 
@@ -72,13 +104,35 @@ var Input = {
       direction = direction.normalize();
     }
 
-
-
     return direction;
   },
 
   getAimDirection: function(){
-    return THREE.Vector2.ZERO;
+    if (this.isAimingWithMouse) return getMouseAimDirection();
+
+    var direction = new THREE.Vector2(0, 0);
+
+    if (GameRoot.keyboard.down("left"))
+    {
+      direction.x -= 1;
+    }
+
+    if (GameRoot.keyboard.down("right"))
+    {
+      direction.x += 1;
+    }
+
+    if (GameRoot.keyboard.down("up"))
+    {
+      direction.y -= 1;
+    }
+
+    if (GameRoot.keyboard.down("down"))
+    {
+      direction.y += 1;
+    }
+
+    return direction === THREE.Vector2.ZERO ? THREE.Vector2.ZERO : direction.normalize();
   },
 
   getMouseAimDirection: function(){
@@ -111,6 +165,18 @@ var Art = {
     texture = THREE.ImageUtils.loadTexture("/images/Seeker.png");
     mat = new THREE.SpriteMaterial({map: texture});
     this.seeker = new THREE.Sprite(mat);
+
+    texture = THREE.ImageUtils.loadTexture("/images/Wanderer.png");
+    mat = new THREE.SpriteMaterial({map: texture});
+    this.wanderer = new THREE.Sprite(mat);
+
+    texture = THREE.ImageUtils.loadTexture("/images/Bullet.png");
+    mat = new THREE.SpriteMaterial({map: texture});
+    this.bullet = new THREE.Sprite(mat);
+
+    texture = THREE.ImageUtils.loadTexture("/images/pointer.png");
+    mat = new THREE.SpriteMaterial({map: texture});
+    this.pointer = new THREE.Sprite(mat);
   }
 }
 
@@ -141,26 +207,41 @@ function Entity() {
 // BULLET
 
 function Bullet(position, velocity) {
-  this.prototype = new Entity();
+  Entity.call(this);
 
-  this.image = Art.Bullet;
-  this.position = position;
-  this.velocity = velocity;
+  this.image = Art.bullet;
+  this.position = position.clone();
+  this.velocity = velocity.clone();
   this.orientation = velocity.toAngle();
   this.radius = 8;
+  this.image.scale.set(28, 9, 0);  // TODO: base this off the image inside Art.bullet
 
   this.update = function(){
     if (this.velocity.lengthSq() > 0)
+    {
       this.orientation = this.velocity.toAngle();
+    }
 
-    this.position = this.position.add(this.velocity);
+    this.position.add(this.velocity);
 
-    // TODO
-    // delete bullets that go off-screen
-    // if (!GameRoot.Viewport.Bounds.Contains(Position.ToPoint()))
-    //     IsExpired = true;
+    // draw logic
+    this.image.position.set(this.position.x, this.position.y, 0);
+    this.image.rotation = this.orientation;
+
+    // console.log('position.x: ', this.position.x);
+    // console.log('screensize.x: ', GameRoot.screenSize.x);
+    // console.log('position.y: ', this.position.y);
+    // console.log('screensize.y: ', GameRoot.screenSize.y);
+    // console.log('isExpired: ', this.isExpired);
+
+    if (!(0 < this.position.x && this.position.x < GameRoot.screenSize.x && 0 < this.position.y && this.position.y < GameRoot.screenSize.y))
+    {
+      //this.isExpired = true;  // TODO: add this back in..  was not removing from screen but removing from EntityManager right away.
+    }
   }
 }
+
+Bullet.prototype = Object.create(Entity.prototype);
 
 // PLAYER SHIP
 
@@ -169,11 +250,12 @@ function PlayerShip() {
 
   this.image = Art.player;
   this.position = GameRoot.screenSize.divideScalar(2);
+  //console.log('playership position: ', this.position);
   this.radius = 10;
   this.cooldownFrames = 6;
   this.cooldownRemaining = 0;
   this.framesUntilRespawn = 0;
-  this.image.scale.set(40, 40, 0);
+  this.image.scale.set(40, 40, 0);  // TODO: base this off the image inside Art.player
 
   this.isDead = function(){
     return this.framesUntilRespawn > 0;
@@ -187,11 +269,26 @@ function PlayerShip() {
     }
 
     var aim = Input.getAimDirection();
-    if (aim.lengthSq() > 0 && this.cooldownRemaining <= 0){
-      // TODO: aim and bullet logic here
+    if (aim.lengthSq() > 0 && this.cooldownRemaining <= 0)
+    {
+      this.cooldownRemaining = this.cooldownFrames;
+      var aimAngle = aim.toAngle();
+      var aimQuat = new THREE.Quaternion(0, 0, aimAngle);
+
+      var randomSpread = GW.Random.NextFloat(-0.04, 0.04) + GW.Random.NextFloat(-0.04, 0.04);
+      var vel = GW.Math.FromPolar(aimAngle + randomSpread, 11.0);
+
+      var offset = GW.Math.Transform(new THREE.Vector2(35, -8), aimQuat);
+      EntityManager.add(new Bullet(this.position.clone().add(offset), vel));
+
+      offset = GW.Math.Transform(new THREE.Vector2(35, 8), aimQuat);
+      EntityManager.add(new Bullet(this.position.clone().add(offset), vel));
+
+      // TODO: play sound
     }
 
-    if (this.cooldownRemaining > 0){
+    if (this.cooldownRemaining > 0)
+    {
       this.cooldownRemaining--;
     }
 
@@ -211,6 +308,10 @@ function PlayerShip() {
 
     // TODO: update image (sprite) with latest values as if this were the draw method
     //console.log(this);
+
+    // TODO: remove the draw loop?
+    //if (this.isExpired) this.image.scale.set(0, 0, 0);
+
     this.image.position.set(this.position.x, this.position.y, 0);
     this.image.rotation = this.orientation;
   }
@@ -252,6 +353,8 @@ var EntityManager = {
       this.bullets.push(entity);
 
     GameRoot.scene.add(entity.image);
+
+    console.log('entity manager count is: ', this.count());
   },
 
   update: function(){
@@ -269,8 +372,16 @@ var EntityManager = {
 
     addedEntities = [];
 
-    entities = _.filter(this.entities, function(x){ return !x.isExpired; });
-    bullets = _.filter(this.bullets, function(x){ return !x.isExpired; });
+    this.entities = _.filter(this.entities, function(x){ return !x.isExpired; });
+    this.bullets = _.filter(this.bullets, function(x){ return !x.isExpired; });
+
+    // var expired = [];
+    // expired = _.filter(this.entities, function(x){ return x.isExpired; });
+    // expired = _.filter(this.bullets, function(x){ return x.isExpired; });
+    // _.each(expired, function(element, index, array){
+    //   delete element;
+    // });
+    // expired = [];
   },
 
   draw: function(){
@@ -303,57 +414,15 @@ var GameRoot = {
   }
 }
 
-// MAIN 
-
-// function Main() {
-
-// }
-
-
-
-
-
-// var clock = new THREE.Clock();
-// var keyboard = new KeyboardState();
-
-// var scene = new THREE.Scene();
-// var camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-// var renderer = new THREE.WebGLRenderer();
-// renderer.setSize(window.innerWidth, window.innerHeight);
-// renderer.setClearColor(0x000000, 1);
-// document.body.appendChild(renderer.domElement);
-
-// var geometry = new THREE.CubeGeometry(1, 1, 1);
-// var material = new THREE.MeshBasicMaterial({color: 0x00ff00});
-// var cube = new THREE.Mesh(geometry, material);
-//scene.add(cube);
-
-//camera.position.z = 5;
-
-
-// var texture = THREE.ImageUtils.loadTexture("/images/Bullet.png");
-// var mat = new THREE.MeshBasicMaterial({color: 0xFFFFFF, ambient: 0xFFFFFF, map: texture});
-// var sphere = new THREE.Mesh(new THREE.SphereGeometry(1, 1, 1), mat);
-// scene.add(sphere);
-
-// var texture = THREE.ImageUtils.loadTexture("/images/Player.png");
-// var mat = new THREE.SpriteMaterial({map: texture});
-// var sprite = new THREE.Sprite(mat);
-// sprite.scale.set(40, 40, 1.0);
-// sprite.position.set(150, 150, 0);
-// scene.add(sprite);
-
 
 // magic happening here...
-
-// there is no init!
 init();
 animate();
 
 
 
-var test = new PlayerShip();
-console.log(test);
+// var test = new PlayerShip();
+// console.log(test);
 
 
 console.log('this is the end');
@@ -363,7 +432,6 @@ console.log('this is the end');
 function init() {
   Art.load();
   GameRoot.initialize();
-  
 }
 
 function animate() {
@@ -375,33 +443,6 @@ function animate() {
 function update() {
   GameRoot.keyboard.update();
   EntityManager.update();
-  // cube.rotation.x += 0.1;
-  // cube.rotation.y += 0.1;
-
-  // //sphere.rotation.x += 0.1;
-  // //sphere.rotation.y += 0.1;
-
-  // keyboard.update();
-
-  // var moveDistance = 50 * clock.getDelta();
-
-  // if (keyboard.down("left"))
-  //   cube.translateX(-50);
-
-  // if (keyboard.down("right"))
-  //   cube.translateX(50);
-
-  // if (keyboard.down("A"))
-  // {
-  //   cube.translateX(-moveDistance);
-  //   sprite.position.setX(sprite.position.x - moveDistance * 10);
-  // }
-
-  // if (keyboard.down("D"))
-  // {
-  //   cube.translateX(moveDistance);
-  //   sprite.position.setX(sprite.position.x + moveDistance * 10);
-  // }
 }
 
 function render() {

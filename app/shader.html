@@ -1,0 +1,136 @@
+<!doctype html>
+<!--[if lt IE 7]>      <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
+<!--[if IE 7]>         <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
+<!--[if IE 8]>         <html class="no-js lt-ie9"> <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js"> <!--<![endif]-->
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+        <title>three js shader</title>
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width">
+        <!-- Place favicon.ico and apple-touch-icon.png in the root directory -->
+        <!-- build:css({.tmp,app}) styles/main.css -->
+        <link rel="stylesheet" href="styles/main.css">
+        <!-- endbuild -->
+        <!-- build:js scripts/vendor/modernizr.js -->
+        <script src="bower_components/modernizr/modernizr.js"></script>
+        <!-- endbuild -->
+        <style>
+            /*canvas { width: 100%; height: 100%; }*/
+            #container {
+                background: #000;
+                width: 400px;
+                height: 300px;
+            }
+        </style>
+    </head>
+    <body>
+
+        <!--[if lt IE 7]>
+            <p class="chromeframe">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> or <a href="http://www.google.com/chromeframe/?redirect=true">activate Google Chrome Frame</a> to improve your experience.</p>
+        <![endif]-->
+
+        <div id="container"></div>
+
+
+        <!-- build:js scripts/main.js -->
+        <script src="lib/underscore.js"></script>
+        <script src="bower_components/jquery/jquery.js"></script>
+        <script src="https://rawgithub.com/mrdoob/three.js/master/build/three.js"></script>
+        <!--<script src="scripts/KeyboardState.js"></script>
+         <script src="scripts/main.js"></script> -->
+        <!-- endbuild -->
+
+        <!-- Shaders -->
+    <script type="x-shader/x-vertex" id="vertexshader">
+        
+        // switch on high precision floats
+        #ifdef GL_ES
+        precision highp float;
+        #endif
+        
+        void main()
+        {
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+        }
+        
+    </script>
+
+    <script type="x-shader/x-fragment" id="fragmentshader">
+    
+        #ifdef GL_ES
+        precision highp float;
+        #endif
+        
+        void main()
+        {
+            gl_FragColor    = vec4(1.0,0.0,1.0,1.0);
+        }
+    
+    </script>
+    
+    <!-- End Shaders -->
+
+
+
+    <script type="text/javascript">
+    // set the scene size
+    var WIDTH = 400,
+        HEIGHT = 300;
+    
+    // set some camera attributes
+    var VIEW_ANGLE = 45,
+        ASPECT = WIDTH / HEIGHT,
+        NEAR = 0.1,
+        FAR = 10000;
+    
+    // get the DOM element to attach to
+    // - assume we've got jQuery to hand
+    var $container = $('#container');
+    
+    // create a WebGL renderer, camera
+    // and a scene
+    var renderer = new THREE.WebGLRenderer();
+    var camera = new THREE.Camera(  VIEW_ANGLE,
+                                    ASPECT,
+                                    NEAR,
+                                    FAR  );
+    var scene = new THREE.Scene();
+    
+    // the camera starts at 0,0,0 so pull it back
+    camera.position.z = 300;
+    
+    // start the renderer
+    renderer.setSize(WIDTH, HEIGHT);
+    
+    // attach the render-supplied DOM element
+    $container.append(renderer.domElement);
+    
+    // create the sphere's material
+    //var shaderMaterial = new THREE.MeshShaderMaterial({
+    var shaderMaterial = new THREE.ShaderMaterial({
+        vertexShader:   $('#vertexshader').text(),
+        fragmentShader: $('#fragmentshader').text()
+    });
+    
+    // set up the sphere vars
+    var radius = 50, segments = 16, rings = 16;
+    
+    // create a new mesh with sphere geometry -
+    // we will cover the sphereMaterial next!
+    var sphere = new THREE.Mesh(
+       //new THREE.Sphere(radius, segments, rings),
+       new THREE.SphereGeometry(radius, segments, rings),
+       shaderMaterial);
+    
+    // add the sphere to the scene
+    //scene.addChild(sphere);
+    scene.add(sphere);
+    
+    // draw!
+    renderer.render(scene, camera);
+
+    </script>
+</body>
+</html>
